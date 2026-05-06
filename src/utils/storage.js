@@ -1,59 +1,49 @@
 const STORAGE_KEYS = {
-  USERS: 'dinner_party_users',
-  CURRENT_USER: 'dinner_party_current_user',
-  RESTAURANTS: 'dinner_party_restaurants',
-  VOTES: 'dinner_party_votes',
-  VOTE_RECORDS: 'dinner_party_vote_records',
-  SETTLEMENTS: 'dinner_party_settlements',
-  DEPARTMENTS: 'dinner_party_departments',
-  ARCHIVES: 'dinner_party_archives',
-  DRAW_RESULTS: 'dinner_party_draw_results',
+  USERS: 'dinner_voting_users',
+  RESTAURANTS: 'dinner_voting_restaurants',
+  VOTES: 'dinner_voting_votes',
+  DEPARTMENTS: 'dinner_voting_departments',
+  SETTLEMENTS: 'dinner_voting_settlements',
+  ARCHIVES: 'dinner_voting_archives',
+  CURRENT_USER: 'dinner_voting_current_user'
 };
 
-export function getItem(key) {
-  try {
-    const item = localStorage.getItem(key);
-    return item ? JSON.parse(item) : null;
-  } catch (error) {
-    console.error('Error reading from localStorage:', error);
-    return null;
+export const storage = {
+  getItem: (key) => {
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS[key]);
+      return data ? JSON.parse(data) : null;
+    } catch {
+      return null;
+    }
+  },
+
+  setItem: (key, value) => {
+    try {
+      localStorage.setItem(STORAGE_KEYS[key], JSON.stringify(value));
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
+  removeItem: (key) => {
+    try {
+      localStorage.removeItem(STORAGE_KEYS[key]);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
+  clear: () => {
+    try {
+      Object.values(STORAGE_KEYS).forEach(key => localStorage.removeItem(key));
+      return true;
+    } catch {
+      return false;
+    }
   }
-}
+};
 
-export function setItem(key, value) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-    return true;
-  } catch (error) {
-    console.error('Error writing to localStorage:', error);
-    return false;
-  }
-}
-
-export function removeItem(key) {
-  try {
-    localStorage.removeItem(key);
-    return true;
-  } catch (error) {
-    console.error('Error removing from localStorage:', error);
-    return false;
-  }
-}
-
-export function clearAll() {
-  try {
-    Object.values(STORAGE_KEYS).forEach(key => {
-      localStorage.removeItem(key);
-    });
-    return true;
-  } catch (error) {
-    console.error('Error clearing localStorage:', error);
-    return false;
-  }
-}
-
-export function generateId() {
-  return Date.now().toString(36) + Math.random().toString(36).substr(2);
-}
-
-export { STORAGE_KEYS };
+export default STORAGE_KEYS;

@@ -1,95 +1,55 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext.jsx';
-import { AppProvider } from './context/AppContext.jsx';
-import Layout from './components/common/Layout.jsx';
-import HomePage from './pages/HomePage.jsx';
-import LoginPage from './pages/LoginPage.jsx';
-import RegisterPage from './pages/RegisterPage.jsx';
-import CreateVotePage from './pages/CreateVotePage.jsx';
-import VoteDetailPage from './pages/VoteDetailPage.jsx';
-import RestaurantListPage from './pages/RestaurantListPage.jsx';
-import UserManagementPage from './pages/UserManagementPage.jsx';
-import ProfilePage from './pages/ProfilePage.jsx';
-import SettlementPage from './pages/SettlementPage.jsx';
-import HelpPage from './pages/HelpPage.jsx';
+import { useEffect, useState } from 'react';
+import { AppProvider, useApp } from './context/AppContext';
+import Login from './pages/Login';
+import Home from './pages/Home';
+import Restaurants from './pages/Restaurants';
+import Votes from './pages/Votes';
+import VoteDetail from './pages/VoteDetail';
+import CreateVote from './pages/CreateVote';
+import Users from './pages/Users';
+import Departments from './pages/Departments';
+import Archives from './pages/Archives';
+import Manual from './pages/Manual';
+
+const Router = () => {
+  const { currentUser } = useApp();
+  const [path, setPath] = useState(window.location.pathname);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setPath(window.location.pathname);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  if (!currentUser) {
+    return <Login />;
+  }
+
+  const renderPage = () => {
+    if (path === '/') return <Home />;
+    if (path === '/home') return <Home />;
+    if (path === '/restaurants') return <Restaurants />;
+    if (path === '/votes') return <Votes />;
+    if (path.startsWith('/votes/create')) return <CreateVote />;
+    if (path.startsWith('/votes/')) return <VoteDetail />;
+    if (path === '/users') return <Users />;
+    if (path === '/departments') return <Departments />;
+    if (path === '/archives') return <Archives />;
+    if (path === '/manual') return <Manual />;
+    return <Home />;
+  };
+
+  return renderPage();
+};
 
 function App() {
   return (
-    <AuthProvider>
-      <AppProvider>
-        <Router>
-          <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/register" element={<RegisterPage />} />
-            <Route
-              path="/"
-              element={
-                <Layout>
-                  <HomePage />
-                </Layout>
-              }
-            />
-            <Route
-              path="/votes/create"
-              element={
-                <Layout>
-                  <CreateVotePage />
-                </Layout>
-              }
-            />
-            <Route
-              path="/votes/:id"
-              element={
-                <Layout>
-                  <VoteDetailPage />
-                </Layout>
-              }
-            />
-            <Route
-              path="/votes/:id/settlement"
-              element={
-                <Layout>
-                  <SettlementPage />
-                </Layout>
-              }
-            />
-            <Route
-              path="/restaurants"
-              element={
-                <Layout>
-                  <RestaurantListPage />
-                </Layout>
-              }
-            />
-            <Route
-              path="/admin/users"
-              element={
-                <Layout>
-                  <UserManagementPage />
-                </Layout>
-              }
-            />
-            <Route
-              path="/profile"
-              element={
-                <Layout>
-                  <ProfilePage />
-                </Layout>
-              }
-            />
-            <Route
-              path="/help"
-              element={
-                <Layout>
-                  <HelpPage />
-                </Layout>
-              }
-            />
-          </Routes>
-        </Router>
-      </AppProvider>
-    </AuthProvider>
+    <AppProvider>
+      <Router />
+    </AppProvider>
   );
 }
 

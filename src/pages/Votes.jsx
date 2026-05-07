@@ -39,7 +39,13 @@ const Votes = () => {
   };
 
   const formatDate = (dateString) => {
+    if (!dateString) {
+      return '暂无日期';
+    }
     const date = new Date(dateString);
+    if (isNaN(date.getTime())) {
+      return '暂无日期';
+    }
     return date.toLocaleDateString('zh-CN', {
       year: 'numeric',
       month: '2-digit',
@@ -57,10 +63,10 @@ const Votes = () => {
           <p className="text-gray-500 mt-1">查看和管理部门的投票</p>
         </div>
         <div className="flex items-center space-x-3">
-          {(currentUser.role === 'admin' || currentUser.role === 'organizer') && (
+          {['super_admin', 'dept_admin', 'organizer'].includes(currentUser.role) && (
             <a
               href="/votes/create"
-              className="flex items-center space-x-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+              className="flex items-center space-x-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors shadow-md"
             >
               <Plus className="w-4 h-4" />
               <span>发起投票</span>
@@ -95,10 +101,10 @@ const Votes = () => {
           <div className="text-center py-12">
             <Clock className="w-16 h-16 mx-auto mb-4 text-gray-300" />
             <p className="text-gray-500">暂无投票记录</p>
-            {(currentUser.role === 'admin' || currentUser.role === 'organizer') && (
+            {['super_admin', 'dept_admin', 'organizer'].includes(currentUser.role) && (
               <a
                 href="/votes/create"
-                className="inline-block mt-4 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+                className="inline-block mt-4 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
               >
                 发起第一个投票
               </a>
@@ -109,10 +115,34 @@ const Votes = () => {
             {filteredVotes.map(vote => {
               const participantsCount = vote.participants?.filter(p => p.participating !== false).length || 0;
               const votedCount = vote.participants?.filter(p => p.restaurant_id).length || 0;
+              const userParticipant = vote.participants?.find(p => p.user_id === currentUser.id);
+              const viewedVotes = JSON.parse(localStorage.getItem('viewedVotes') || '[]');
+              const hasNotViewed = vote.status === 'active' && !viewedVotes.includes(vote.id);
+
+              const handleButtonClick = (e, action) => {
+                e.stopPropagation();
+                action();
+              };
+
+              const handleViewDetail = (voteId) => {
+                const viewedVotes = JSON.parse(localStorage.getItem('viewedVotes') || '[]');
+                if (!viewedVotes.includes(voteId)) {
+                  viewedVotes.push(voteId);
+                  localStorage.setItem('viewedVotes', JSON.stringify(viewedVotes));
+                }
+              };
 
               return (
-                <div key={vote.id} className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow">
-                  <div className="p-4">
+                <a
+                  key={vote.id}
+                  href={`/votes/${vote.id}`}
+                  onClick={() => handleViewDetail(vote.id)}
+                  className="block border border-gray-200 rounded-lg overflow-hidden hover:shadow-md hover:border-orange-300 transition-all cursor-pointer"
+                >
+                  <div className="p-4 relative">
+                    {hasNotViewed && (
+                      <div className="absolute top-3 right-3 w-2 h-2 bg-red-500 rounded-full"></div>
+                    )}
                     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                       <div className="flex-1">
                         <div className="flex items-center space-x-2 mb-2">
@@ -136,6 +166,12 @@ const Votes = () => {
                             <Users className="w-4 h-4" />
                             <span>{votedCount}/{participantsCount} 人已投票</span>
                           </span>
+                          {vote.status === 'active' && userParticipant?.participating !== false && !userParticipant?.restaurant_id && (
+                            <span className="flex items-center space-x-1 text-gray-400">
+                              <XCircle className="w-4 h-4" />
+                              <span>未参与投票</span>
+                            </span>
+                          )}
                           {vote.total_amount && (
                             <span className="text-orange-600 font-medium">
                               总金额: ¥{vote.total_amount}
@@ -144,16 +180,10 @@ const Votes = () => {
                         </div>
                       </div>
                       <div className="flex items-center space-x-2">
-                        <a
-                          href={`/votes/${vote.id}`}
-                          className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
-                          title="查看详情"
-                        >
-                          <Eye className="w-5 h-5" />
-                        </a>
+                        <span className="text-sm text-orange-500 hover:text-orange-600">查看详情</span>
                         {vote.status === 'active' && (
                           <button
-                            onClick={() => handleEndVote(vote.id)}
+                            onClick={(e) => handleButtonClick(e, () => handleEndVote(vote.id))}
                             className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                             title="结束投票"
                           >
@@ -162,16 +192,16 @@ const Votes = () => {
                         )}
                         {vote.status === 'completed' && (
                           <button
-                            onClick={() => handleArchive(vote.id)}
+                            onClick={(e) => handleButtonClick(e, () => handleArchive(vote.id))}
                             className="p-2 text-gray-400 hover:text-purple-500 hover:bg-purple-50 rounded-lg transition-colors"
                             title="归档投票"
                           >
                             <Play className="w-5 h-5" />
                           </button>
                         )}
-                        {(currentUser.role === 'admin' || currentUser.role === 'organizer') && (
+                        {['super_admin', 'dept_admin', 'organizer'].includes(currentUser.role) && (
                           <button
-                            onClick={() => handleDelete(vote.id)}
+                            onClick={(e) => handleButtonClick(e, () => handleDelete(vote.id))}
                             className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                             title="删除投票"
                           >
@@ -200,7 +230,7 @@ const Votes = () => {
                       </div>
                     )}
                   </div>
-                </div>
+                </a>
               );
             })}
           </div>

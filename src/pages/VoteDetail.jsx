@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Check, X, Upload, Download, TrendingUp, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Check, X, Upload, Download, TrendingUp, RefreshCw, AlertCircle, Calendar } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import Layout from '../components/common/Layout';
 
@@ -21,6 +21,7 @@ const VoteDetail = () => {
   const [showSettlement, setShowSettlement] = useState(false);
   const [totalAmount, setTotalAmount] = useState('');
   const [reimbursementAmount, setReimbursementAmount] = useState('');
+  const [restaurantIds, setRestaurantIds] = useState([]);
 
   useEffect(() => {
     const pathParts = window.location.pathname.split('/');
@@ -35,6 +36,7 @@ const VoteDetail = () => {
       if (foundVote) {
         const participant = foundVote.participants?.find(p => p.user_id === currentUser?.id);
         setSelectedRestaurant(participant?.restaurant_id || null);
+        setRestaurantIds(foundVote.restaurant_ids || foundVote.restaurant_options || []);
       }
     }
   }, [voteId, currentUser?.id, getVoteById]);
@@ -82,7 +84,9 @@ const VoteDetail = () => {
       return;
     }
     setSelectedRestaurant(restaurantId);
-    castVote(vote.id, restaurantId);
+    castVote(vote.id, restaurantId).then(() => {
+      window.location.reload();
+    });
   };
 
   const handleUploadReceipt = (e) => {
@@ -122,7 +126,12 @@ const VoteDetail = () => {
     let content = `聚餐投票归档\n\n`;
     content += `投票标题: ${vote.title}\n`;
     content += `描述: ${vote.description || '-'}\n`;
-    content += `创建时间: ${new Date(vote.created_at).toLocaleString('zh-CN')}\n`;
+    const formatCreatedAt = (dateString) => {
+      if (!dateString) return '暂无日期';
+      const date = new Date(dateString);
+      return isNaN(date.getTime()) ? '暂无日期' : date.toLocaleString('zh-CN');
+    };
+    content += `创建时间: ${formatCreatedAt(vote.created_at)}\n`;
     content += `状态: ${vote.status === 'active' ? '进行中' : vote.status === 'completed' ? '已结束' : '已归档'}\n\n`;
     
     content += `餐厅列表及投票结果:\n`;
@@ -166,6 +175,9 @@ const VoteDetail = () => {
 
   const sortedResults = Object.entries(vote.results || {}).sort((a, b) => b[1] - a[1]);
   const maxVotes = sortedResults.length > 0 ? sortedResults[0][1] : 0;
+  
+  const hasTie = sortedResults.length >= 2 && maxVotes > 0 && 
+    sortedResults.filter(([, votes]) => votes === maxVotes).length > 1;
 
   return (
     <Layout>
@@ -177,6 +189,16 @@ const VoteDetail = () => {
           <div>
             <h1 className="text-2xl font-bold text-gray-800">{vote.title}</h1>
             <p className="text-gray-500">{vote.description}</p>
+            {vote.dinner_date && (
+              <p className="text-orange-600 mt-1 flex items-center">
+                <Calendar className="w-4 h-4 mr-1" />
+                聚餐日期: {new Date(vote.dinner_date).toLocaleDateString('zh-CN', {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric'
+                })}
+              </p>
+            )}
           </div>
         </div>
 
@@ -240,7 +262,7 @@ const VoteDetail = () => {
           </div>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {vote.restaurant_options?.map(restaurantId => {
+            {restaurantIds.map(restaurantId => {
               const restaurant = getRestaurantById(restaurantId);
               const votes = vote.results?.[restaurantId] || 0;
               const percentage = maxVotes > 0 ? (votes / maxVotes) * 100 : 0;
@@ -297,6 +319,15 @@ const VoteDetail = () => {
             <TrendingUp className="w-5 h-5 mr-2 text-orange-500" />
             实时投票结果
           </h3>
+          
+          {hasTie && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+              <p className="text-yellow-700 text-sm flex items-center">
+                <AlertCircle className="w-4 h-4 mr-2" />
+                当前结果存在平票，最终结果将随机选出
+              </p>
+            </div>
+          )}
           
           {sortedResults.length === 0 ? (
             <p className="text-center text-gray-500 py-8">暂无投票数据</p>
@@ -395,7 +426,7 @@ const VoteDetail = () => {
           </div>
         )}
 
-        {(currentUser.role === 'admin' || currentUser.role === 'organizer') && vote.status === 'active' && (
+        {(currentUser.role === 'super_admin' || currentUser.role === 'organizer') && vote.status === 'active' && (
           <div className="bg-white rounded-xl shadow-sm p-6">
             <h3 className="font-semibold text-gray-800 mb-4">组织者操作</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -410,7 +441,7 @@ const VoteDetail = () => {
           </div>
         )}
 
-        {(currentUser.role === 'admin' || currentUser.role === 'organizer') && vote.status === 'completed' && (
+        {(currentUser.role === 'super_admin' || currentUser.role === 'organizer') && vote.status === 'completed' && (
           <div className="bg-white rounded-xl shadow-sm p-6">
             <h3 className="font-semibold text-gray-800 mb-4">组织者操作</h3>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

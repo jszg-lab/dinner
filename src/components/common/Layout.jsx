@@ -1,10 +1,20 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Menu, X, User, Home, Users, Utensils, BarChart3, Archive, Book } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
 const Layout = ({ children }) => {
   const { currentUser, logout, getDepartmentById } = useApp();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [currentPath, setCurrentPath] = useState('');
+
+  useEffect(() => {
+    setCurrentPath(window.location.pathname);
+    const handlePopState = () => {
+      setCurrentPath(window.location.pathname);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   const department = currentUser ? getDepartmentById(currentUser.department_id) : null;
 
@@ -27,10 +37,10 @@ const Layout = ({ children }) => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow-md fixed w-full top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
+    <div className="min-h-screen bg-gray-50 flex">
+      <nav className="fixed top-0 left-0 right-0 bg-white shadow-md z-50 h-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full">
+          <div className="flex justify-between h-full">
             <div className="flex items-center">
               <button
                 onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -53,7 +63,9 @@ const Layout = ({ children }) => {
                     <span>{department?.name || '-'}</span>
                     <span className="mx-2">|</span>
                     <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">
-                      {currentUser.role === 'admin' ? '管理员' : currentUser.role === 'organizer' ? '组织者' : '成员'}
+                      {currentUser.role === 'super_admin' ? '超级管理员' : 
+                       currentUser.role === 'dept_admin' ? '部门管理员' : 
+                       currentUser.role === 'organizer' ? '组织者' : '成员'}
                     </span>
                   </div>
                   <button
@@ -69,9 +81,9 @@ const Layout = ({ children }) => {
         </div>
       </nav>
 
-      <aside className={`fixed lg:static inset-y-0 left-0 z-40 w-64 bg-white shadow-lg transform transition-transform duration-300 lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="h-full pt-16 pb-4 overflow-y-auto">
-          <div className="px-4 py-3">
+      <aside className={`fixed top-16 left-0 bottom-0 z-40 w-64 bg-white shadow-lg transform transition-transform duration-300 lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="h-full flex flex-col">
+          <div className="px-4 py-3 border-b">
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center">
                 <User className="w-5 h-5 text-orange-500" />
@@ -83,14 +95,19 @@ const Layout = ({ children }) => {
             </div>
           </div>
 
-          <nav className="px-2 mt-4 space-y-1">
+          <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto">
             {navItems.map((item) => {
               const Icon = item.icon;
+              const isActive = currentPath === item.path || (item.path === '/' && currentPath === '/home');
               return (
                 <a
                   key={item.path}
                   href={item.path}
-                  className="flex items-center space-x-3 px-3 py-2 rounded-lg text-gray-600 hover:bg-orange-50 hover:text-orange-600 transition-colors"
+                  className={`flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${
+                    isActive 
+                      ? 'bg-orange-500 text-white' 
+                      : 'text-gray-600 hover:bg-orange-50 hover:text-orange-600'
+                  }`}
                 >
                   <Icon className="w-5 h-5" />
                   <span>{item.label}</span>
@@ -98,16 +115,21 @@ const Layout = ({ children }) => {
               );
             })}
 
-            {currentUser?.role === 'admin' && (
+            {currentUser?.role === 'super_admin' && (
               <>
                 <div className="px-3 py-2 text-xs font-semibold text-gray-400 mt-4">管理中心</div>
                 {adminNavItems.map((item) => {
                   const Icon = item.icon;
+                  const isActive = currentPath === item.path;
                   return (
                     <a
                       key={item.path}
                       href={item.path}
-                      className="flex items-center space-x-3 px-3 py-2 rounded-lg text-gray-600 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                      className={`flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${
+                        isActive 
+                          ? 'bg-blue-500 text-white' 
+                          : 'text-gray-600 hover:bg-blue-50 hover:text-blue-600'
+                      }`}
                     >
                       <Icon className="w-5 h-5" />
                       <span>{item.label}</span>
@@ -116,12 +138,28 @@ const Layout = ({ children }) => {
                 })}
               </>
             )}
+            {currentUser?.role === 'dept_admin' && (
+              <>
+                <div className="px-3 py-2 text-xs font-semibold text-gray-400 mt-4">管理中心</div>
+                <a
+                  href="/users"
+                  className={`flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${
+                    currentPath === '/users' 
+                      ? 'bg-blue-500 text-white' 
+                      : 'text-gray-600 hover:bg-blue-50 hover:text-blue-600'
+                  }`}
+                >
+                  <Users className="w-5 h-5" />
+                  <span>用户管理</span>
+                </a>
+              </>
+            )}
           </nav>
         </div>
       </aside>
 
-      <main className="pt-16 lg:pl-64 min-h-screen">
-        <div className="p-4 sm:p-6 lg:p-8">
+      <main className="flex-1 lg:ml-64 min-h-screen pt-16">
+        <div className="max-w-6xl mx-auto p-4 sm:p-6 lg:p-8">
           {children}
         </div>
       </main>

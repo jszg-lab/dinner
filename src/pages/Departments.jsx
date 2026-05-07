@@ -11,7 +11,7 @@ const Departments = () => {
     description: ''
   });
 
-  if (!currentUser || currentUser.role !== 'admin') {
+  if (!currentUser || currentUser.role !== 'super_admin') {
     window.location.href = '/';
     return null;
   }

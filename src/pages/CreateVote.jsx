@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeft, Plus, X, Calendar, Clock } from 'lucide-react';
+import { ArrowLeft, Plus, X, Calendar, Clock, AlertCircle } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import Layout from '../components/common/Layout';
 
@@ -9,13 +9,14 @@ const CreateVote = () => {
   const [description, setDescription] = useState('');
   const [selectedRestaurants, setSelectedRestaurants] = useState([]);
   const [duration, setDuration] = useState(30);
+  const [dinnerDate, setDinnerDate] = useState('');
 
   if (!currentUser) {
     window.location.href = '/';
     return null;
   }
 
-  if (currentUser.role !== 'admin' && currentUser.role !== 'organizer') {
+  if (!['super_admin', 'dept_admin', 'organizer'].includes(currentUser.role)) {
     return (
       <Layout>
         <div className="text-center py-12">
@@ -28,14 +29,19 @@ const CreateVote = () => {
     );
   }
 
+  const [showMaxRestaurantsWarning, setShowMaxRestaurantsWarning] = useState(false);
+
   const toggleRestaurant = (restaurantId) => {
     if (selectedRestaurants.includes(restaurantId)) {
       setSelectedRestaurants(selectedRestaurants.filter(id => id !== restaurantId));
+      setShowMaxRestaurantsWarning(false);
     } else {
-      if (selectedRestaurants.length < 6) {
+      if (selectedRestaurants.length < 10) {
         setSelectedRestaurants([...selectedRestaurants, restaurantId]);
+        setShowMaxRestaurantsWarning(false);
       } else {
-        alert('最多选择6个餐厅');
+        setShowMaxRestaurantsWarning(true);
+        setTimeout(() => setShowMaxRestaurantsWarning(false), 3000);
       }
     }
   };
@@ -46,6 +52,10 @@ const CreateVote = () => {
       alert('请输入投票标题');
       return;
     }
+    if (!dinnerDate) {
+      alert('请选择聚餐日期');
+      return;
+    }
     if (selectedRestaurants.length < 2) {
       alert('请至少选择2个餐厅');
       return;
@@ -54,20 +64,32 @@ const CreateVote = () => {
     const voteData = {
       title: title.trim(),
       description: description.trim(),
-      restaurant_options: selectedRestaurants,
-      restaurants: restaurants.filter(r => selectedRestaurants.includes(r.id)),
+      restaurant_ids: selectedRestaurants,
       department_id: currentUser.department_id,
-      duration_minutes: duration,
-      created_by: currentUser.id,
-      created_by_nickname: currentUser.nickname
+      dinner_date: dinnerDate
     };
 
-    createVote(voteData);
-    window.location.href = '/votes';
+    createVote(voteData).then(result => {
+      if (result.success) {
+        window.location.href = '/votes';
+      } else {
+        alert(result.message || '创建投票失败');
+      }
+    }).catch(err => {
+      alert('创建投票失败: ' + err.message);
+    });
   };
 
   return (
     <Layout>
+      {showMaxRestaurantsWarning && (
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 animate-bounce">
+          <div className="bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center space-x-2">
+            <AlertCircle className="w-5 h-5" />
+            <span>最多只能选择10个餐厅</span>
+          </div>
+        </div>
+      )}
       <div className="max-w-2xl mx-auto">
         <div className="flex items-center space-x-4 mb-6">
           <a href="/votes" className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
@@ -122,8 +144,22 @@ const CreateVote = () => {
           </div>
 
           <div className="mb-6">
+            <label className="flex items-center space-x-2 text-sm font-medium text-gray-700 mb-2">
+              <Calendar className="w-4 h-4" />
+              <span>聚餐日期 *</span>
+            </label>
+            <input
+              type="date"
+              value={dinnerDate}
+              onChange={(e) => setDinnerDate(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              min={new Date().toISOString().split('T')[0]}
+            />
+          </div>
+
+          <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              选择餐厅 * (最多6个)
+              选择餐厅 * (最多10个)
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {restaurants.map(restaurant => (
@@ -149,7 +185,7 @@ const CreateVote = () => {
               ))}
             </div>
             <p className="text-sm text-gray-500 mt-3">
-              已选择 {selectedRestaurants.length}/6 个餐厅
+              已选择 {selectedRestaurants.length}/10 个餐厅
             </p>
           </div>
 

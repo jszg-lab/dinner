@@ -50,6 +50,7 @@ const Restaurants = () => {
 
   const [rejectReason, setRejectReason] = useState('');
   const [reviewRecommendation, setReviewRecommendation] = useState(null);
+  const [reviewAction, setReviewAction] = useState(null);
   const [recommendError, setRecommendError] = useState('');
 
   if (!currentUser) {
@@ -124,7 +125,7 @@ const Restaurants = () => {
     }
   };
 
-  const handleRecommendSubmit = (e) => {
+  const handleRecommendSubmit = async (e) => {
     e.preventDefault();
     setRecommendError('');
 
@@ -139,7 +140,7 @@ const Restaurants = () => {
       tags: recommendData.tags.split(',').map(t => t.trim()).filter(t => t)
     };
 
-    const result = addRestaurantRecommendation(data);
+    const result = await addRestaurantRecommendation(data);
     if (result.success) {
       alert('推荐成功，等待管理员审核');
       setShowRecommendModal(false);
@@ -164,10 +165,12 @@ const Restaurants = () => {
     setRecommendError('');
   };
 
-  const handleApprove = (recommendationId) => {
-    approveRecommendation(recommendationId);
+  const handleApprove = () => {
+    approveRecommendation(reviewRecommendation.id);
     alert('审核通过，餐厅已添加到餐厅池');
     setShowReviewModal(false);
+    setReviewRecommendation(null);
+    setReviewAction(null);
   };
 
   const handleReject = () => {
@@ -176,10 +179,18 @@ const Restaurants = () => {
       return;
     }
     rejectRecommendation(reviewRecommendation.id, rejectReason);
-    alert('已拒绝该推荐');
+    alert('已拒绝该推荐，拒绝原因已发送给推荐用户');
     setShowReviewModal(false);
     setRejectReason('');
     setReviewRecommendation(null);
+    setReviewAction(null);
+  };
+
+  const openReviewModal = (rec, action) => {
+    setReviewRecommendation(rec);
+    setReviewAction(action);
+    setRejectReason('');
+    setShowReviewModal(true);
   };
 
   const handleImportJSON = (e) => {
@@ -220,7 +231,7 @@ const Restaurants = () => {
             <ThumbsUp className="w-4 h-4" />
             <span>推荐餐厅</span>
           </button>
-          {currentUser.role === 'admin' && (
+          {currentUser.role === 'super_admin' && (
             <>
               <label className="flex items-center space-x-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg cursor-pointer hover:bg-blue-100 transition-colors">
                 <Upload className="w-4 h-4" />
@@ -250,7 +261,7 @@ const Restaurants = () => {
         >
           餐厅列表
         </button>
-        {currentUser.role === 'admin' && (
+        {currentUser.role === 'super_admin' && (
           <button
             onClick={() => setActiveTab('recommendations')}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors relative ${
@@ -300,7 +311,7 @@ const Restaurants = () => {
               <div className="p-4">
                 <div className="flex justify-between items-start mb-3">
                   <h3 className="font-semibold text-gray-800">{restaurant.name}</h3>
-                  {currentUser.role === 'admin' && (
+                  {currentUser.role === 'super_admin' && (
                     <div className="flex space-x-1">
                       <button
                         onClick={() => openEditModal(restaurant)}
@@ -571,14 +582,14 @@ const Restaurants = () => {
 
                   <div className="flex space-x-2">
                     <button
-                      onClick={() => { setReviewRecommendation(rec); setShowReviewModal(true); }}
+                      onClick={() => openReviewModal(rec, 'approve')}
                       className="flex-1 flex items-center justify-center space-x-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
                     >
                       <Check className="w-4 h-4" />
                       <span>审核通过</span>
                     </button>
                     <button
-                      onClick={() => { setReviewRecommendation(rec); setShowReviewModal(true); }}
+                      onClick={() => openReviewModal(rec, 'reject')}
                       className="flex-1 flex items-center justify-center space-x-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
                     >
                       <X className="w-4 h-4" />
@@ -740,9 +751,11 @@ const Restaurants = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
             <div className="flex items-center justify-between p-4 border-b">
-              <h2 className="text-lg font-semibold text-gray-800">审核餐厅推荐</h2>
+              <h2 className="text-lg font-semibold text-gray-800">
+                {reviewAction === 'approve' ? '确认通过餐厅推荐' : '确认拒绝餐厅推荐'}
+              </h2>
               <button
-                onClick={() => { setShowReviewModal(false); setRejectReason(''); setReviewRecommendation(null); }}
+                onClick={() => { setShowReviewModal(false); setRejectReason(''); setReviewRecommendation(null); setReviewAction(null); }}
                 className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
               >
                 <X className="w-5 h-5 text-gray-500" />
@@ -755,31 +768,45 @@ const Restaurants = () => {
                 <p className="text-gray-800">{reviewRecommendation.name}</p>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">拒绝原因（仅拒绝时填写）</label>
-                <textarea
-                  value={rejectReason}
-                  onChange={(e) => setRejectReason(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none"
-                  rows={3}
-                  placeholder="请说明拒绝该推荐的原因..."
-                />
-              </div>
+              {reviewAction === 'reject' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">拒绝原因 <span className="text-red-500">*</span></label>
+                  <textarea
+                    value={rejectReason}
+                    onChange={(e) => setRejectReason(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none"
+                    rows={3}
+                    placeholder="请说明拒绝该推荐的原因，此原因将发送给推荐用户..."
+                  />
+                </div>
+              )}
+
+              {reviewAction === 'approve' && (
+                <div className="bg-green-50 rounded-lg p-3">
+                  <p className="text-sm text-green-700">
+                    确认通过后，该餐厅将被添加到餐厅池中，推荐用户也会收到通知。
+                  </p>
+                </div>
+              )}
 
               <div className="flex space-x-3">
                 <button
-                  onClick={() => { handleApprove(reviewRecommendation.id); }}
-                  className="flex-1 flex items-center justify-center space-x-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
-                >
-                  <Check className="w-4 h-4" />
-                  <span>审核通过</span>
-                </button>
-                <button
-                  onClick={handleReject}
-                  className="flex-1 flex items-center justify-center space-x-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                  onClick={() => { setShowReviewModal(false); setRejectReason(''); setReviewRecommendation(null); setReviewAction(null); }}
+                  className="flex-1 flex items-center justify-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                 >
                   <X className="w-4 h-4" />
-                  <span>拒绝</span>
+                  <span>取消</span>
+                </button>
+                <button
+                  onClick={reviewAction === 'approve' ? handleApprove : handleReject}
+                  className={`flex-1 flex items-center justify-center space-x-2 px-4 py-2 text-white rounded-lg transition-colors ${
+                    reviewAction === 'approve' 
+                      ? 'bg-green-500 hover:bg-green-600' 
+                      : 'bg-red-500 hover:bg-red-600'
+                  }`}
+                >
+                  <Check className="w-4 h-4" />
+                  <span>确认</span>
                 </button>
               </div>
             </div>

@@ -1,6 +1,12 @@
-import { createContext, useContext, useEffect, useState } from 'react';
-import { storage } from '../utils/storage';
-import { mockUsers, mockRestaurants, mockDepartments, mockVotes } from '../data/mockData';
+import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { 
+  authAPI, 
+  userAPI, 
+  restaurantAPI, 
+  voteAPI, 
+  departmentAPI, 
+  recommendationAPI 
+} from '../services/api';
 
 const AppContext = createContext();
 
@@ -19,261 +25,259 @@ export const AppProvider = ({ children }) => {
   const [departments, setDepartments] = useState([]);
   const [restaurantRecommendations, setRestaurantRecommendations] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  useEffect(() => {
-    const storedUsers = storage.getItem('USERS');
-    const storedRestaurants = storage.getItem('RESTAURANTS');
-    const storedVotes = storage.getItem('VOTES');
-    const storedDepartments = storage.getItem('DEPARTMENTS');
-    const storedRecommendations = storage.getItem('RESTAURANT_RECOMMENDATIONS');
-    const storedCurrentUser = storage.getItem('CURRENT_USER');
-
-    if (!storedUsers || storedUsers.length === 0) {
-      storage.setItem('USERS', mockUsers);
-      setUsers(mockUsers);
-    } else {
-      setUsers(storedUsers);
-    }
-
-    if (!storedRestaurants || storedRestaurants.length === 0) {
-      storage.setItem('RESTAURANTS', mockRestaurants);
-      setRestaurants(mockRestaurants);
-    } else {
-      setRestaurants(storedRestaurants);
-    }
-
-    if (!storedVotes) {
-      storage.setItem('VOTES', mockVotes);
-      setVotes(mockVotes);
-    } else {
-      setVotes(storedVotes);
-    }
-
-    if (!storedDepartments || storedDepartments.length === 0) {
-      storage.setItem('DEPARTMENTS', mockDepartments);
-      setDepartments(mockDepartments);
-    } else {
-      setDepartments(storedDepartments);
-    }
-
-    if (!storedRecommendations) {
-      storage.setItem('RESTAURANT_RECOMMENDATIONS', []);
-      setRestaurantRecommendations([]);
-    } else {
-      setRestaurantRecommendations(storedRecommendations);
-    }
-
-    if (storedCurrentUser) {
-      setCurrentUser(storedCurrentUser);
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [usersData, restaurantsData, votesData, departmentsData, recommendationsData] = await Promise.all([
+        userAPI.getAllUsers().catch(() => []),
+        restaurantAPI.getAllRestaurants().catch(() => []),
+        voteAPI.getAllVotes().catch(() => []),
+        departmentAPI.getAllDepartments().catch(() => []),
+        recommendationAPI.getAllRecommendations().catch(() => [])
+      ]);
+      setUsers(usersData);
+      setRestaurants(restaurantsData);
+      setVotes(votesData);
+      setDepartments(departmentsData);
+      setRestaurantRecommendations(recommendationsData);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
-  const login = (nickname, password) => {
-    const user = users.find(u => u.nickname === nickname && u.password === password);
-    if (user) {
-      setCurrentUser(user);
-      storage.setItem('CURRENT_USER', user);
-      return { success: true, user };
-    }
-    return { success: false, message: '昵称或密码错误' };
-  };
-
-  const logout = () => {
-    setCurrentUser(null);
-    storage.removeItem('CURRENT_USER');
-  };
-
-  const addUser = (user) => {
-    const newUser = {
-      ...user,
-      id: `u${Date.now()}`,
-      created_at: new Date().toISOString().split('T')[0]
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const response = await authAPI.getCurrentUser();
+        if (response.success) {
+          setCurrentUser(response.user);
+          await loadData();
+        }
+      } catch {
+        setCurrentUser(null);
+        setLoading(false);
+      }
     };
-    const updatedUsers = [...users, newUser];
-    setUsers(updatedUsers);
-    storage.setItem('USERS', updatedUsers);
-    return newUser;
-  };
+    checkAuth();
+  }, [loadData]);
 
-  const updateUser = (userId, updates) => {
-    const updatedUsers = users.map(u => 
-      u.id === userId ? { ...u, ...updates } : u
-    );
-    setUsers(updatedUsers);
-    storage.setItem('USERS', updatedUsers);
-    if (currentUser?.id === userId) {
-      const updatedUser = updatedUsers.find(u => u.id === userId);
-      setCurrentUser(updatedUser);
-      storage.setItem('CURRENT_USER', updatedUser);
+  const login = async (nickname, password) => {
+    try {
+      const result = await authAPI.login(nickname, password);
+      if (result.success) {
+        setCurrentUser(result.user);
+        await loadData();
+        return { success: true, user: result.user };
+      }
+      return result;
+    } catch (err) {
+      return { success: false, message: err.message };
     }
   };
 
-  const deleteUser = (userId) => {
-    const updatedUsers = users.filter(u => u.id !== userId);
-    setUsers(updatedUsers);
-    storage.setItem('USERS', updatedUsers);
+  const logout = async () => {
+    try {
+      await authAPI.logout();
+      setCurrentUser(null);
+      setUsers([]);
+      setRestaurants([]);
+      setVotes([]);
+      setDepartments([]);
+      setRestaurantRecommendations([]);
+    } catch {
+      setCurrentUser(null);
+    }
   };
 
-  const addRestaurant = (restaurant) => {
-    const newRestaurant = {
-      ...restaurant,
-      id: `r${Date.now()}`,
-      tags: restaurant.tags || []
-    };
-    const updatedRestaurants = [...restaurants, newRestaurant];
-    setRestaurants(updatedRestaurants);
-    storage.setItem('RESTAURANTS', updatedRestaurants);
-    return newRestaurant;
+  const addUser = async (user) => {
+    try {
+      const newUser = await userAPI.createUser(user);
+      setUsers(prev => [...prev, newUser]);
+      return newUser;
+    } catch (err) {
+      throw err;
+    }
   };
 
-  const updateRestaurant = (restaurantId, updates) => {
-    const updatedRestaurants = restaurants.map(r => 
-      r.id === restaurantId ? { ...r, ...updates } : r
-    );
-    setRestaurants(updatedRestaurants);
-    storage.setItem('RESTAURANTS', updatedRestaurants);
-  };
-
-  const deleteRestaurant = (restaurantId) => {
-    const updatedRestaurants = restaurants.filter(r => r.id !== restaurantId);
-    setRestaurants(updatedRestaurants);
-    storage.setItem('RESTAURANTS', updatedRestaurants);
-  };
-
-  const addDepartment = (department) => {
-    const newDepartment = {
-      ...department,
-      id: `d${Date.now()}`
-    };
-    const updatedDepartments = [...departments, newDepartment];
-    setDepartments(updatedDepartments);
-    storage.setItem('DEPARTMENTS', updatedDepartments);
-    return newDepartment;
-  };
-
-  const deleteDepartment = (departmentId) => {
-    const updatedDepartments = departments.filter(d => d.id !== departmentId);
-    setDepartments(updatedDepartments);
-    storage.setItem('DEPARTMENTS', updatedDepartments);
-  };
-
-  const createVote = (voteData) => {
-    const departmentUsers = users.filter(u => u.department_id === voteData.department_id);
-    const initialParticipants = departmentUsers.map(user => ({
-      user_id: user.id,
-      user_nickname: user.nickname,
-      participating: false,
-      restaurant_id: null
-    }));
-    
-    const newVote = {
-      ...voteData,
-      id: `v${Date.now()}`,
-      status: 'active',
-      created_at: new Date().toISOString(),
-      participants: initialParticipants,
-      results: {}
-    };
-    const updatedVotes = [...votes, newVote];
-    setVotes(updatedVotes);
-    storage.setItem('VOTES', updatedVotes);
-    return newVote;
-  };
-
-  const updateVote = (voteId, updates) => {
-    const updatedVotes = votes.map(v => 
-      v.id === voteId ? { ...v, ...updates } : v
-    );
-    setVotes(updatedVotes);
-    storage.setItem('VOTES', updatedVotes);
-  };
-
-  const deleteVote = (voteId) => {
-    const updatedVotes = votes.filter(v => v.id !== voteId);
-    setVotes(updatedVotes);
-    storage.setItem('VOTES', updatedVotes);
-  };
-
-  const castVote = (voteId, restaurantId) => {
-    const updatedVotes = votes.map(v => {
-      if (v.id === voteId) {
-        const existingVote = v.participants.find(p => p.user_id === currentUser.id);
-        let newParticipants;
-        if (existingVote) {
-          newParticipants = v.participants.map(p => 
-            p.user_id === currentUser.id 
-              ? { ...p, restaurant_id: restaurantId }
-              : p
-          );
-        } else {
-          newParticipants = [...v.participants, {
-            user_id: currentUser.id,
-            user_nickname: currentUser.nickname,
-            restaurant_id,
-            voted_at: new Date().toISOString()
-          }];
-        }
-
-        const results = { ...v.results };
-        Object.keys(results).forEach(key => {
-          results[key] = newParticipants.filter(p => p.restaurant_id === key).length;
-        });
-
-        if (!results[restaurantId]) {
-          results[restaurantId] = 0;
-        }
-        results[restaurantId] = newParticipants.filter(p => p.restaurant_id === restaurantId).length;
-
-        return { ...v, participants: newParticipants, results };
+  const updateUser = async (userId, updates) => {
+    try {
+      const updatedUser = await userAPI.updateUser(userId, updates);
+      setUsers(prev => prev.map(u => u.id === userId ? updatedUser : u));
+      if (currentUser?.id === userId) {
+        setCurrentUser(updatedUser);
       }
-      return v;
-    });
-    setVotes(updatedVotes);
-    storage.setItem('VOTES', updatedVotes);
+      return updatedUser;
+    } catch (err) {
+      throw err;
+    }
   };
 
-  const confirmParticipation = (voteId, participating) => {
-    const updatedVotes = votes.map(v => {
-      if (v.id === voteId) {
-        const existingParticipant = v.participants.find(p => p.user_id === currentUser.id);
-        if (participating) {
-          if (!existingParticipant) {
-            return {
-              ...v,
-              participants: [...v.participants, {
-                user_id: currentUser.id,
-                user_nickname: currentUser.nickname,
-                participating: true,
-                confirmed_at: new Date().toISOString()
-              }]
-            };
-          } else {
-            return {
-              ...v,
-              participants: v.participants.map(p =>
-                p.user_id === currentUser.id
-                  ? { ...p, participating: true, confirmed_at: new Date().toISOString() }
-                  : p
-              )
-            };
-          }
-        } else {
-          if (existingParticipant) {
-            return {
-              ...v,
-              participants: v.participants.map(p =>
-                p.user_id === currentUser.id
-                  ? { ...p, participating: false, restaurant_id: null }
-                  : p
-              )
-            };
-          }
-        }
+  const deleteUser = async (userId) => {
+    try {
+      await userAPI.deleteUser(userId);
+      setUsers(prev => prev.filter(u => u.id !== userId));
+    } catch (err) {
+      throw err;
+    }
+  };
+
+  const addRestaurant = async (restaurant) => {
+    try {
+      const newRestaurant = await restaurantAPI.createRestaurant(restaurant);
+      setRestaurants(prev => [...prev, newRestaurant]);
+      return newRestaurant;
+    } catch (err) {
+      throw err;
+    }
+  };
+
+  const updateRestaurant = async (restaurantId, updates) => {
+    try {
+      const updatedRestaurant = await restaurantAPI.updateRestaurant(restaurantId, updates);
+      setRestaurants(prev => prev.map(r => r.id === restaurantId ? updatedRestaurant : r));
+      return updatedRestaurant;
+    } catch (err) {
+      throw err;
+    }
+  };
+
+  const deleteRestaurant = async (restaurantId) => {
+    try {
+      await restaurantAPI.deleteRestaurant(restaurantId);
+      setRestaurants(prev => prev.filter(r => r.id !== restaurantId));
+    } catch (err) {
+      throw err;
+    }
+  };
+
+  const addDepartment = async (department) => {
+    try {
+      const newDepartment = await departmentAPI.createDepartment(department);
+      setDepartments(prev => [...prev, newDepartment]);
+      return newDepartment;
+    } catch (err) {
+      throw err;
+    }
+  };
+
+  const deleteDepartment = async (departmentId) => {
+    try {
+      await departmentAPI.deleteDepartment(departmentId);
+      setDepartments(prev => prev.filter(d => d.id !== departmentId));
+    } catch (err) {
+      throw err;
+    }
+  };
+
+  const createVote = async (voteData) => {
+    try {
+      const newVote = await voteAPI.createVote(voteData);
+      setVotes(prev => [...prev, newVote]);
+      return { success: true, vote: newVote };
+    } catch (err) {
+      return { success: false, message: err.message };
+    }
+  };
+
+  const updateVote = async (voteId, updates) => {
+    try {
+      const updatedVote = await voteAPI.updateVote(voteId, updates);
+      setVotes(prev => prev.map(v => v.id === voteId ? updatedVote : v));
+      return updatedVote;
+    } catch (err) {
+      throw err;
+    }
+  };
+
+  const deleteVote = async (voteId) => {
+    try {
+      await voteAPI.deleteVote(voteId);
+      setVotes(prev => prev.filter(v => v.id !== voteId));
+    } catch (err) {
+      throw err;
+    }
+  };
+
+  const castVote = async (voteId, restaurantId) => {
+    try {
+      await voteAPI.castVote(voteId, restaurantId);
+      await loadData();
+    } catch (err) {
+      throw err;
+    }
+  };
+
+  const confirmParticipation = async (voteId, participating) => {
+    try {
+      await voteAPI.confirmParticipation(voteId, participating);
+      await loadData();
+    } catch (err) {
+      throw err;
+    }
+  };
+
+  const addRestaurantRecommendation = async (recommendationData) => {
+    try {
+      const result = await recommendationAPI.createRecommendation(recommendationData);
+      if (result.success) {
+        setRestaurantRecommendations(prev => [...prev, { ...result.recommendation, ...recommendationData }]);
       }
-      return v;
-    });
-    setVotes(updatedVotes);
-    storage.setItem('VOTES', updatedVotes);
+      return result;
+    } catch (err) {
+      return { success: false, message: err.message };
+    }
+  };
+
+  const approveRecommendation = async (recommendationId) => {
+    try {
+      const result = await recommendationAPI.approveRecommendation(recommendationId);
+      if (result.success) {
+        setRestaurants(prev => [...prev, result.restaurant]);
+        setRestaurantRecommendations(prev => prev.map(r => 
+          r.id === recommendationId ? { ...r, status: 'approved' } : r
+        ));
+      }
+      return result;
+    } catch (err) {
+      return { success: false, message: err.message };
+    }
+  };
+
+  const rejectRecommendation = async (recommendationId, reason) => {
+    try {
+      const result = await recommendationAPI.rejectRecommendation(recommendationId, reason);
+      if (result.success) {
+        setRestaurantRecommendations(prev => prev.map(r => 
+          r.id === recommendationId ? { ...r, status: 'rejected', reject_reason: reason } : r
+        ));
+      }
+      return result;
+    } catch (err) {
+      return { success: false, message: err.message };
+    }
+  };
+
+  const deleteRecommendation = async (recommendationId) => {
+    try {
+      await recommendationAPI.deleteRecommendation(recommendationId);
+      setRestaurantRecommendations(prev => prev.filter(r => r.id !== recommendationId));
+    } catch (err) {
+      throw err;
+    }
+  };
+
+  const getPendingRecommendations = () => {
+    return restaurantRecommendations.filter(r => r.status === 'pending');
+  };
+
+  const getUserRecommendations = (userId) => {
+    return restaurantRecommendations.filter(r => r.recommended_by === userId);
   };
 
   const getDepartmentUsers = (departmentId) => {
@@ -300,87 +304,8 @@ export const AppProvider = ({ children }) => {
     return users.find(u => u.id === userId);
   };
 
-  const addRestaurantRecommendation = (recommendationData) => {
-    const isDuplicate = restaurants.some(r => 
-      r.name.toLowerCase() === recommendationData.name.toLowerCase()
-    );
-    
-    if (isDuplicate) {
-      return { success: false, message: '该餐厅已存在于餐厅池中' };
-    }
-
-    const isPendingDuplicate = restaurantRecommendations.some(r => 
-      r.name.toLowerCase() === recommendationData.name.toLowerCase() && r.status === 'pending'
-    );
-    
-    if (isPendingDuplicate) {
-      return { success: false, message: '该餐厅已有待审核的推荐，请等待管理员审核' };
-    }
-
-    const newRecommendation = {
-      ...recommendationData,
-      id: `rec${Date.now()}`,
-      status: 'pending',
-      recommended_by: currentUser.id,
-      recommended_by_nickname: currentUser.nickname,
-      recommended_at: new Date().toISOString()
-    };
-
-    const updatedRecommendations = [...restaurantRecommendations, newRecommendation];
-    setRestaurantRecommendations(updatedRecommendations);
-    storage.setItem('RESTAURANT_RECOMMENDATIONS', updatedRecommendations);
-    return { success: true, recommendation: newRecommendation };
-  };
-
-  const approveRecommendation = (recommendationId) => {
-    const recommendation = restaurantRecommendations.find(r => r.id === recommendationId);
-    if (!recommendation || recommendation.status !== 'pending') {
-      return { success: false, message: '推荐不存在或状态错误' };
-    }
-
-    const newRestaurant = {
-      ...recommendation,
-      id: `r${Date.now()}`,
-      tags: recommendation.tags || []
-    };
-
-    const updatedRestaurants = [...restaurants, newRestaurant];
-    setRestaurants(updatedRestaurants);
-    storage.setItem('RESTAURANTS', updatedRestaurants);
-
-    const updatedRecommendations = restaurantRecommendations.map(r => 
-      r.id === recommendationId ? { ...r, status: 'approved' } : r
-    );
-    setRestaurantRecommendations(updatedRecommendations);
-    storage.setItem('RESTAURANT_RECOMMENDATIONS', updatedRecommendations);
-
-    return { success: true };
-  };
-
-  const rejectRecommendation = (recommendationId, reason) => {
-    const updatedRecommendations = restaurantRecommendations.map(r => 
-      r.id === recommendationId 
-        ? { ...r, status: 'rejected', reject_reason: reason } 
-        : r
-    );
-    setRestaurantRecommendations(updatedRecommendations);
-    storage.setItem('RESTAURANT_RECOMMENDATIONS', updatedRecommendations);
-    return { success: true };
-  };
-
-  const deleteRecommendation = (recommendationId) => {
-    const updatedRecommendations = restaurantRecommendations.filter(r => r.id !== recommendationId);
-    setRestaurantRecommendations(updatedRecommendations);
-    storage.setItem('RESTAURANT_RECOMMENDATIONS', updatedRecommendations);
-    return { success: true };
-  };
-
-  const getPendingRecommendations = () => {
-    return restaurantRecommendations.filter(r => r.status === 'pending');
-  };
-
-  const getUserRecommendations = (userId) => {
-    return restaurantRecommendations.filter(r => r.recommended_by === userId);
+  const refreshData = () => {
+    loadData();
   };
 
   const value = {
@@ -390,6 +315,8 @@ export const AppProvider = ({ children }) => {
     departments,
     restaurantRecommendations,
     currentUser,
+    loading,
+    error,
     login,
     logout,
     addUser,
@@ -416,7 +343,8 @@ export const AppProvider = ({ children }) => {
     getDepartmentById,
     getRestaurantById,
     getVoteById,
-    getUserById
+    getUserById,
+    refreshData
   };
 
   return (
@@ -424,4 +352,4 @@ export const AppProvider = ({ children }) => {
       {children}
     </AppContext.Provider>
   );
-};
+}; 

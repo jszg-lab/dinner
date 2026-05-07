@@ -12,7 +12,7 @@ import Archives from './pages/Archives';
 import Manual from './pages/Manual';
 
 const Router = () => {
-  const { currentUser } = useApp();
+  const { currentUser, loading } = useApp();
   const [path, setPath] = useState(window.location.pathname);
 
   useEffect(() => {
@@ -23,6 +23,18 @@ const Router = () => {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-xl text-gray-600">加载中...</div>
+      </div>
+    );
+  }
+
+  if (path === '/manual') {
+    return <Manual />;
+  }
 
   if (!currentUser) {
     return <Login />;
@@ -38,7 +50,6 @@ const Router = () => {
     if (path === '/users') return <Users />;
     if (path === '/departments') return <Departments />;
     if (path === '/archives') return <Archives />;
-    if (path === '/manual') return <Manual />;
     return <Home />;
   };
 

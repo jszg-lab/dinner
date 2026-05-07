@@ -523,7 +523,7 @@ export const mockUsers = [
     id: 'u1',
     nickname: '管理员',
     password: 'admin123',
-    role: 'admin',
+    role: 'super_admin',
     department_id: 'd1',
     created_at: '2024-01-01'
   },

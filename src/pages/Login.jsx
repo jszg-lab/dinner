@@ -1,33 +1,45 @@
 import { useState } from 'react';
-import { Utensils, User, Lock, AlertCircle } from 'lucide-react';
+import { Utensils, User, Lock, AlertCircle, Book } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 const Login = () => {
-  const { login, currentUser } = useApp();
+  const { login, currentUser, loading } = useApp();
   const [nickname, setNickname] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (currentUser) {
     window.location.href = '/home';
     return null;
   }
 
-  const handleSubmit = (e) => {
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-xl">加载中...</div>
+      </div>
+    );
+  }
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setIsSubmitting(true);
 
     if (!nickname.trim() || !password.trim()) {
       setError('请输入昵称和密码');
+      setIsSubmitting(false);
       return;
     }
 
-    const result = login(nickname.trim(), password);
+    const result = await login(nickname.trim(), password);
     if (result.success) {
       window.location.href = '/home';
     } else {
       setError(result.message);
     }
+    setIsSubmitting(false);
   };
 
   return (
@@ -79,16 +91,24 @@ const Login = () => {
 
           <button
             type="submit"
-            className="w-full bg-orange-500 hover:bg-orange-600 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200"
+            disabled={isSubmitting}
+            className="w-full bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200"
           >
-            登录
+            {isSubmitting ? '登录中...' : '登录'}
           </button>
         </form>
 
         <div className="mt-6 text-center">
           <p className="text-sm text-gray-500">
-            测试账号：<span className="font-medium text-gray-700">管理员</span> / <span className="font-medium text-gray-700">admin123</span>
-          </p>
+          点击下方使用手册获取测试账号
+        </p>
+        <a
+          href="/manual"
+          className="inline-flex items-center mt-4 text-orange-500 hover:text-orange-600 text-sm font-medium"
+        >
+          <Book className="w-4 h-4 mr-1" />
+          使用手册
+        </a>
         </div>
       </div>
     </div>

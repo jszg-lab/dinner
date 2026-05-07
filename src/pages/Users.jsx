@@ -18,7 +18,7 @@ const Users = () => {
     department_id: ''
   });
 
-  if (!currentUser || currentUser.role !== 'admin') {
+  if (!currentUser || !['super_admin', 'dept_admin'].includes(currentUser.role)) {
     window.location.href = '/';
     return null;
   }
@@ -111,7 +111,8 @@ const Users = () => {
 
   const getRoleLabel = (role) => {
     const roles = {
-      admin: '管理员',
+      super_admin: '超级管理员',
+      dept_admin: '部门管理员',
       organizer: '组织者',
       member: '成员'
     };
@@ -182,7 +183,8 @@ const Users = () => {
                   </td>
                   <td className="py-3 px-4">
                     <span className={`px-2 py-1 text-xs rounded-full ${
-                      user.role === 'admin' ? 'bg-red-100 text-red-600' :
+                      user.role === 'super_admin' ? 'bg-red-100 text-red-600' :
+                      user.role === 'dept_admin' ? 'bg-purple-100 text-purple-600' :
                       user.role === 'organizer' ? 'bg-yellow-100 text-yellow-600' :
                       'bg-green-100 text-green-600'
                     }`}>
@@ -273,7 +275,10 @@ const Users = () => {
                 >
                   <option value="member">成员</option>
                   <option value="organizer">组织者</option>
-                  <option value="admin">管理员</option>
+                  <option value="dept_admin">部门管理员</option>
+                  {currentUser.role === 'super_admin' && (
+                    <option value="super_admin">超级管理员</option>
+                  )}
                 </select>
               </div>
 
